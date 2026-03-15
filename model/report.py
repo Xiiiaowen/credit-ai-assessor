@@ -13,6 +13,24 @@ from fpdf import FPDF
 
 from model.explain import FEATURE_LABELS
 
+# Characters the LLM commonly outputs that Latin-1 (Helvetica) can't encode
+_UNICODE_MAP = str.maketrans({
+    "\u2014": "--",   # em dash
+    "\u2013": "-",    # en dash
+    "\u2018": "'",    # left single quote
+    "\u2019": "'",    # right single quote
+    "\u201c": '"',    # left double quote
+    "\u201d": '"',    # right double quote
+    "\u2026": "...",  # ellipsis
+    "\u00b7": "-",    # middle dot
+    "\u2022": "-",    # bullet
+})
+
+def _safe(text: str) -> str:
+    """Replace common Unicode chars with ASCII equivalents, drop anything else outside Latin-1."""
+    text = text.translate(_UNICODE_MAP)
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
 
 def _shap_chart_bytes(shap_values, feature_names) -> bytes:
     """Render SHAP bar chart and return PNG bytes."""
@@ -96,10 +114,10 @@ def generate_pdf(
 
     fill = False
     for key, label in display_fields:
-        val = applicant.get(key, "—")
+        val = applicant.get(key, "-")
         pdf.set_fill_color(240, 240, 240)
-        pdf.cell(80, 7, f"  {label}", border=0, fill=fill)
-        pdf.cell(0,  7, f"  {val}", border=0, fill=fill, ln=True)
+        pdf.cell(80, 7, _safe(f"  {label}"), border=0, fill=fill)
+        pdf.cell(0,  7, _safe(f"  {val}"), border=0, fill=fill, ln=True)
         fill = not fill
     pdf.ln(4)
 
@@ -125,7 +143,7 @@ def generate_pdf(
         direction = "increases" if shap_values[i] > 0 else "decreases"
         pdf.multi_cell(
             0, 6,
-            f"  - {label_str} ('{val}'): {direction} default risk  [SHAP: {shap_values[i]:+.3f}]"
+            _safe(f"  - {label_str} ('{val}'): {direction} default risk  [SHAP: {shap_values[i]:+.3f}]")
         )
     pdf.ln(3)
 
@@ -135,7 +153,7 @@ def generate_pdf(
         pdf.cell(0, 8, "Credit Assessment Memo", ln=True)
         pdf.set_font("Helvetica", "I", 10)
         pdf.set_fill_color(248, 248, 248)
-        pdf.multi_cell(0, 6, memo, fill=True)
+        pdf.multi_cell(0, 6, _safe(memo), fill=True)
         pdf.ln(3)
 
     # ── Disclaimer ────────────────────────────────────────────────────────────
