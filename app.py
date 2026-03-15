@@ -323,9 +323,11 @@ with tab_assess:
         if label != "Low":
             st.divider()
             st.subheader("Approval Path")
-            st.caption(
-                "Minimum changes the model suggests to move this applicant toward lower risk. "
-                "Each change is the single value that most reduces default probability at that step."
+            st.markdown(
+                "The model works backwards to find the **smallest set of changes** that would "
+                "bring this applicant's default probability below the Low Risk threshold (35%). "
+                "Each row is one change, applied in sequence — the *Probability After* column "
+                "shows the updated risk at that step."
             )
             with st.spinner("Searching for approval path…"):
                 cf_changes, cf_prob = find_counterfactual(
@@ -337,22 +339,25 @@ with tab_assess:
                 cf_colour = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}[cf_label]
                 orig_colour = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}[label]
                 st.markdown(
-                    f"Applying these {len(cf_changes)} change(s) would move the applicant from "
-                    f"**{orig_colour} {label} Risk ({prob:.1%})** → "
-                    f"**{cf_colour} {cf_label} Risk ({cf_prob:.1%})**"
+                    f"**Result:** {len(cf_changes)} change(s) move the applicant from "
+                    f"{orig_colour} **{label} Risk ({prob:.1%})** → "
+                    f"{cf_colour} **{cf_label} Risk ({cf_prob:.1%})**"
                 )
                 rows = [
                     {
+                        "Step": i + 1,
                         "Feature": FEATURE_LABELS.get(ch["feature"], ch["feature"].replace("_", " ").title()),
                         "Current Value": str(ch["old"]),
                         "Suggested Value": str(ch["new"]),
+                        "Probability After": f"{ch['prob_after']:.1%}  ({ch['prob_after'] - ch['prob_before']:+.1%})",
                     }
-                    for ch in cf_changes
+                    for i, ch in enumerate(cf_changes)
                 ]
-                st.table(pd.DataFrame(rows))
+                st.table(pd.DataFrame(rows).set_index("Step"))
                 st.caption(
-                    "Note: these are model-based suggestions, not a credit decision. "
-                    "Features like age and personal status are excluded as they are not changeable."
+                    "Changes are chosen greedily: at each step the model picks the single value "
+                    "that reduces default probability the most. Immutable features (age, personal "
+                    "status, nationality) are excluded."
                 )
             else:
                 st.info("No combination of changes found that meaningfully reduces risk for this applicant.")

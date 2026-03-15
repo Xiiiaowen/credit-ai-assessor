@@ -71,7 +71,13 @@ def find_counterfactual(
                 best_val = cand
 
         if best_val is not None:
-            changes.append({"feature": feat, "old": old_val, "new": best_val})
+            changes.append({
+                "feature": feat,
+                "old": old_val,
+                "new": best_val,
+                "prob_before": base_prob,
+                "prob_after": best_prob,
+            })
             current[feat] = best_val
 
             if best_prob <= target_prob:
