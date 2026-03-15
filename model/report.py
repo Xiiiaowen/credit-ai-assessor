@@ -63,6 +63,8 @@ def generate_pdf(
     shap_values,
     feature_names: list[str],
     memo: str,
+    cf_changes: list | None = None,
+    cf_prob: float | None = None,
 ) -> bytes:
     """Return PDF bytes for the full credit assessment report."""
 
@@ -156,6 +158,47 @@ def generate_pdf(
         pdf.set_fill_color(248, 248, 248)
         pdf.set_x(pdf.l_margin)
         pdf.multi_cell(pdf.epw, 6, _safe(memo), fill=True)
+        pdf.ln(3)
+
+    # ── Approval Path ─────────────────────────────────────────────────────────
+    if cf_changes:
+        cf_label = "Low" if cf_prob < 0.35 else ("Medium" if cf_prob < 0.60 else "High")
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.cell(0, 8, "Approval Path", ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(
+            pdf.epw, 6,
+            _safe(
+                f"The following changes would reduce default probability from "
+                f"{probability:.1%} to {cf_prob:.1%} ({cf_label} Risk). "
+                f"Each change is the single value that most reduces risk at that step."
+            )
+        )
+        pdf.ln(2)
+
+        # Table header
+        col_w = [10, 65, 55, 60]   # step / feature / current / suggested = 190
+        headers = ["#", "Feature", "Current Value", "Suggested Value"]
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(220, 220, 220)
+        pdf.set_x(pdf.l_margin)
+        for w, h in zip(col_w, headers):
+            pdf.cell(w, 7, _safe(f" {h}"), border=1, fill=True)
+        pdf.ln()
+
+        pdf.set_font("Helvetica", "", 9)
+        fill = False
+        for i, ch in enumerate(cf_changes):
+            label_str = FEATURE_LABELS.get(ch["feature"], ch["feature"].replace("_", " ").title())
+            pdf.set_fill_color(240, 240, 240)
+            pdf.set_x(pdf.l_margin)
+            pdf.cell(col_w[0], 7, f" {i + 1}", border=1, fill=fill)
+            pdf.cell(col_w[1], 7, _safe(f" {label_str}"), border=1, fill=fill)
+            pdf.cell(col_w[2], 7, _safe(f" {ch['old']}"), border=1, fill=fill)
+            pdf.cell(col_w[3], 7, _safe(f" {ch['new']}"), border=1, fill=fill)
+            pdf.ln()
+            fill = not fill
         pdf.ln(3)
 
     # ── Disclaimer ────────────────────────────────────────────────────────────

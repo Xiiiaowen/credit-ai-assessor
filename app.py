@@ -184,7 +184,7 @@ with tab_assess:
         st.session_state["result"] = result
         st.session_state["applicant"] = applicant
         for key in list(st.session_state.keys()):
-            if key.startswith("wi_"):
+            if key.startswith("wi_") or key in ("cf_changes", "cf_prob"):
                 del st.session_state[key]
 
     # ── Results ───────────────────────────────────────────────────────────────
@@ -329,10 +329,16 @@ with tab_assess:
                 "Each row is one change, applied in sequence — the *Probability After* column "
                 "shows the updated risk at that step."
             )
-            with st.spinner("Searching for approval path…"):
-                cf_changes, cf_prob = find_counterfactual(
-                    applicant, shap_vals, feature_names, _WHATIF_OPTIONS
-                )
+            if "cf_changes" not in st.session_state:
+                with st.spinner("Searching for approval path…"):
+                    cf_changes, cf_prob = find_counterfactual(
+                        applicant, shap_vals, feature_names, _WHATIF_OPTIONS
+                    )
+                    st.session_state["cf_changes"] = cf_changes
+                    st.session_state["cf_prob"] = cf_prob
+            else:
+                cf_changes = st.session_state["cf_changes"]
+                cf_prob    = st.session_state["cf_prob"]
 
             if cf_changes:
                 cf_label  = "Low" if cf_prob < 0.35 else ("Medium" if cf_prob < 0.60 else "High")
@@ -366,7 +372,9 @@ with tab_assess:
         st.divider()
         memo_text = st.session_state.get("memo", "")
         pdf_bytes = generate_pdf(
-            applicant, prob, label, shap_vals, feature_names, memo_text
+            applicant, prob, label, shap_vals, feature_names, memo_text,
+            cf_changes=st.session_state.get("cf_changes"),
+            cf_prob=st.session_state.get("cf_prob"),
         )
         st.download_button(
             label="Download Assessment Report (PDF)",
