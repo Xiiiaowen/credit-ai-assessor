@@ -16,6 +16,7 @@ from model.predict import predict, get_global_importance
 from model.explain import explain_stream, FEATURE_LABELS
 from model.report import generate_pdf
 from model.counterfactual import find_counterfactual
+from model.batch import score_batch, make_template_csv, REQUIRED_COLUMNS
 
 st.set_page_config(page_title="AI Credit Assessor", layout="wide")
 
@@ -82,7 +83,7 @@ with col_title:
 
 st.divider()
 
-tab_assess, tab_model = st.tabs(["Applicant Assessment", "Model Overview"])
+tab_assess, tab_batch, tab_model = st.tabs(["Applicant Assessment", "Batch Assessment", "Model Overview"])
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 1 — Applicant Assessment
@@ -387,7 +388,125 @@ with tab_assess:
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 2 — Model Overview
+# TAB 2 — Batch Assessment
+# ════════════════════════════════════════════════════════════════════════════
+with tab_batch:
+    st.subheader("Batch Assessment")
+    st.markdown(
+        "Score multiple applicants at once. Upload a CSV with one applicant per row — "
+        "the model returns a default probability and risk label for each. "
+        "Download the template below to see the expected column names and valid values."
+    )
+
+    # ── Template download ──────────────────────────────────────────────────
+    st.download_button(
+        "Download CSV Template (5 example rows)",
+        data=make_template_csv(),
+        file_name="applicant_template.csv",
+        mime="text/csv",
+    )
+
+    st.divider()
+
+    # ── File upload ────────────────────────────────────────────────────────
+    uploaded = st.file_uploader("Upload applicant CSV", type="csv", label_visibility="collapsed")
+
+    if uploaded:
+        try:
+            raw_df = pd.read_csv(uploaded)
+        except Exception as e:
+            st.error(f"Could not read file: {e}")
+            st.stop()
+
+        st.caption(f"{len(raw_df)} row(s) loaded.")
+
+        with st.spinner(f"Scoring {len(raw_df)} applicants…"):
+            try:
+                result_df = score_batch(raw_df)
+            except ValueError as e:
+                st.error(str(e))
+                st.markdown("**Expected columns:**")
+                st.code(", ".join(REQUIRED_COLUMNS))
+                st.stop()
+
+        # ── Summary metrics ────────────────────────────────────────────────
+        counts = result_df["risk_label"].value_counts()
+        avg_prob = result_df["default_probability"].mean()
+
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Total Applicants", len(result_df))
+        m2.metric("🟢 Low Risk",    counts.get("Low",    0))
+        m3.metric("🟡 Medium Risk", counts.get("Medium", 0))
+        m4.metric("🔴 High Risk",   counts.get("High",   0))
+        m5.metric("Avg Default Prob", f"{avg_prob:.1%}")
+
+        # ── Risk distribution chart ────────────────────────────────────────
+        st.divider()
+        risk_order  = ["Low", "Medium", "High"]
+        bar_colors  = ["#2ecc71", "#f39c12", "#e74c3c"]
+        bar_vals    = [counts.get(r, 0) for r in risk_order]
+
+        fig_b, ax_b = plt.subplots(figsize=(4, 2.2))
+        ax_b.bar(risk_order, bar_vals, color=bar_colors, width=0.5)
+        for i, v in enumerate(bar_vals):
+            if v:
+                ax_b.text(i, v + 0.3, str(v), ha="center", va="bottom", color="white", fontsize=10)
+        ax_b.set_ylabel("Count", color="white")
+        ax_b.set_facecolor("#0e1117")
+        fig_b.patch.set_facecolor("#0e1117")
+        ax_b.tick_params(colors="white")
+        ax_b.spines["top"].set_visible(False)
+        ax_b.spines["right"].set_visible(False)
+        ax_b.spines["left"].set_color("white")
+        ax_b.spines["bottom"].set_color("white")
+        plt.tight_layout()
+        st.pyplot(fig_b, use_container_width=False)
+        plt.close(fig_b)
+
+        # ── Results table ──────────────────────────────────────────────────
+        st.divider()
+        filter_risk = st.radio(
+            "Filter results", ["All", "High", "Medium", "Low"],
+            horizontal=True, label_visibility="collapsed"
+        )
+        show_df = result_df if filter_risk == "All" else result_df[result_df["risk_label"] == filter_risk]
+
+        # Display subset of columns for readability; full data in download
+        display_cols = ["risk_label", "default_probability",
+                        "checking_status", "credit_amount", "duration",
+                        "credit_history", "savings_status", "employment", "age"]
+        disp = show_df[display_cols].copy()
+        disp["default_probability"] = disp["default_probability"].map(lambda x: f"{x:.1%}")
+        disp = disp.rename(columns={
+            "risk_label": "Risk",
+            "default_probability": "Default Prob",
+            "checking_status": "Checking",
+            "credit_amount": "Loan (DM)",
+            "duration": "Duration (mo)",
+            "credit_history": "Credit History",
+            "savings_status": "Savings",
+            "employment": "Employment",
+            "age": "Age",
+        })
+        st.dataframe(disp, use_container_width=True, hide_index=True)
+        st.caption("Table shows key columns. Download below for the full dataset.")
+
+        # ── Download results ───────────────────────────────────────────────
+        st.divider()
+        out_df = result_df.copy()
+        out_df["default_probability"] = out_df["default_probability"].map(lambda x: f"{x:.1%}")
+        st.download_button(
+            "Download Full Results (CSV)",
+            data=out_df.to_csv(index=False),
+            file_name="batch_results.csv",
+            mime="text/csv",
+            type="primary",
+            use_container_width=True,
+        )
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 3 — Model Overview
 # ════════════════════════════════════════════════════════════════════════════
 with tab_model:
 

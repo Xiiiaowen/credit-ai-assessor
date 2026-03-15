@@ -14,7 +14,8 @@ An AI-powered credit risk assessment tool that combines a trained XGBoost model 
 4. **GPT-4o-mini writes a credit assessment memo** — plain English, 3-4 sentences, suitable for a junior loan officer
 5. **What-If Analysis** — adjust the top 3 risk drivers and instantly see how the probability changes
 6. **Approval Path (counterfactual)** — model finds the minimum changes needed to move a High/Medium applicant toward Low risk
-7. **Model Overview tab** — global feature importance (XGBoost gain), model metrics, and a local vs global explainability comparison
+7. **Batch Assessment tab** — upload a CSV of applicants, score all at once, view risk distribution, filter by risk band, download results
+8. **Model Overview tab** — global feature importance (XGBoost gain), model metrics, and a local vs global explainability comparison
 
 ---
 
@@ -63,6 +64,7 @@ The Gini coefficient (= 2 × AUC − 1) and KS statistic are the standard metric
 - **What-If sensitivity analysis** — top 3 SHAP-identified risk drivers exposed as interactive controls; re-runs the model live to show probability delta
 - **Approval Path (counterfactual)** — greedy search over risk-increasing features; finds the minimum set of changes to reduce the risk label, with immutable features (age, personal status) excluded
 - **Global vs local explainability** — Model Overview tab contrasts XGBoost gain (global) with per-applicant SHAP (local), with a comparison table
+- **Batch assessment** — vectorised scoring of CSV uploads; summary metrics, risk distribution chart, filter by risk band, full CSV export
 - **Bring your own API key** — paste key in sidebar; falls back to environment variable
 
 ---
@@ -77,7 +79,8 @@ credit-ai-assessor/
 │   ├── predict.py           # Load model, encode input, compute SHAP values
 │   ├── explain.py           # GPT-4o-mini memo generation (streaming)
 │   ├── counterfactual.py    # Greedy approval path search (minimum changes to reduce risk)
-│   └── report.py            # PDF report generation (fpdf2)
+│   ├── report.py            # PDF report generation (fpdf2)
+│   └── batch.py             # Vectorised batch scoring for CSV uploads
 ├── artifacts/
 │   └── model.pkl            # Trained model + SHAP explainer + encoders
 ├── requirements.txt
