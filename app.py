@@ -11,9 +11,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import pandas as pd
 from model.predict import predict, get_global_importance
-from model.explain import explain_stream
+from model.explain import explain_stream, FEATURE_LABELS
 from model.report import generate_pdf
+from model.counterfactual import find_counterfactual
 
 st.set_page_config(page_title="AI Credit Assessor", layout="wide")
 
@@ -316,6 +318,44 @@ with tab_assess:
                 st.error("Risk increased — these changes worsen the applicant's profile.")
             else:
                 st.info("Minimal change — the model is not very sensitive to these adjustments.")
+
+        # ── Approval Path (Counterfactual) ────────────────────────────────────
+        if label != "Low":
+            st.divider()
+            st.subheader("Approval Path")
+            st.caption(
+                "Minimum changes the model suggests to move this applicant toward lower risk. "
+                "Each change is the single value that most reduces default probability at that step."
+            )
+            with st.spinner("Searching for approval path…"):
+                cf_changes, cf_prob = find_counterfactual(
+                    applicant, shap_vals, feature_names, _WHATIF_OPTIONS
+                )
+
+            if cf_changes:
+                cf_label  = "Low" if cf_prob < 0.35 else ("Medium" if cf_prob < 0.60 else "High")
+                cf_colour = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}[cf_label]
+                orig_colour = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}[label]
+                st.markdown(
+                    f"Applying these {len(cf_changes)} change(s) would move the applicant from "
+                    f"**{orig_colour} {label} Risk ({prob:.1%})** → "
+                    f"**{cf_colour} {cf_label} Risk ({cf_prob:.1%})**"
+                )
+                rows = [
+                    {
+                        "Feature": FEATURE_LABELS.get(ch["feature"], ch["feature"].replace("_", " ").title()),
+                        "Current Value": str(ch["old"]),
+                        "Suggested Value": str(ch["new"]),
+                    }
+                    for ch in cf_changes
+                ]
+                st.table(pd.DataFrame(rows))
+                st.caption(
+                    "Note: these are model-based suggestions, not a credit decision. "
+                    "Features like age and personal status are excluded as they are not changeable."
+                )
+            else:
+                st.info("No combination of changes found that meaningfully reduces risk for this applicant.")
 
         # ── PDF download ──────────────────────────────────────────────────────
         st.divider()

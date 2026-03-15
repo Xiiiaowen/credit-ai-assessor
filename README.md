@@ -13,7 +13,8 @@ An AI-powered credit risk assessment tool that combines a trained XGBoost model 
 3. **SHAP breakdown shows which factors drove the score** — red bars increase risk, blue bars decrease it
 4. **GPT-4o-mini writes a credit assessment memo** — plain English, 3-4 sentences, suitable for a junior loan officer
 5. **What-If Analysis** — adjust the top 3 risk drivers and instantly see how the probability changes
-6. **Model Overview tab** — global feature importance (XGBoost gain), model metrics, and a local vs global explainability comparison
+6. **Approval Path (counterfactual)** — model finds the minimum changes needed to move a High/Medium applicant toward Low risk
+7. **Model Overview tab** — global feature importance (XGBoost gain), model metrics, and a local vs global explainability comparison
 
 ---
 
@@ -60,6 +61,7 @@ The Gini coefficient (= 2 × AUC − 1) and KS statistic are the standard metric
 - **LLM credit memo** — SHAP values are passed to GPT-4o-mini with a credit officer system prompt; the model translates statistical output into a readable business memo
 - **Finance-standard evaluation** — reports ROC-AUC, Gini coefficient, and KS statistic (not just accuracy)
 - **What-If sensitivity analysis** — top 3 SHAP-identified risk drivers exposed as interactive controls; re-runs the model live to show probability delta
+- **Approval Path (counterfactual)** — greedy search over risk-increasing features; finds the minimum set of changes to reduce the risk label, with immutable features (age, personal status) excluded
 - **Global vs local explainability** — Model Overview tab contrasts XGBoost gain (global) with per-applicant SHAP (local), with a comparison table
 - **Bring your own API key** — paste key in sidebar; falls back to environment variable
 
@@ -112,7 +114,7 @@ python train.py
 
 **Model monitoring** — in production, you track data drift (input distribution shifts) and concept drift (the relationship between features and default changes over time). Tools: Evidently, WhyLogs.
 
-**Regulatory explainability** — under GDPR Article 22 and the EU AI Act, automated credit decisions require human-interpretable explanations. SHAP provides this. In practice, you'd also need counterfactual explanations ("what would need to change for this applicant to be approved?").
+**Regulatory explainability** — under GDPR Article 22 and the EU AI Act, automated credit decisions require human-interpretable explanations. SHAP provides local per-applicant attribution; the Approval Path feature provides counterfactual explanations ("what would need to change for this applicant to be approved?"), both of which are required in production credit systems.
 
 ---
 

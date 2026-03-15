@@ -69,6 +69,25 @@ def predict(applicant: dict) -> dict:
     }
 
 
+def predict_prob(applicant: dict) -> float:
+    """Fast probability-only prediction (no SHAP). Used for counterfactual search."""
+    art = _load()
+    model = art["model"]
+    encoders = art["encoders"]
+    feature_names = art["feature_names"]
+
+    row = {}
+    for feat in feature_names:
+        val = applicant[feat]
+        if feat in encoders:
+            row[feat] = encoders[feat].transform([str(val)])[0]
+        else:
+            row[feat] = float(val)
+
+    X = pd.DataFrame([row], columns=feature_names)
+    return float(model.predict_proba(X)[0, 1])
+
+
 def get_global_importance() -> dict:
     """
     Return global feature importance (XGBoost gain) and saved model metrics.
