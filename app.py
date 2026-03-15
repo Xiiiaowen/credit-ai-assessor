@@ -1,6 +1,6 @@
 """
 AI Credit Assessor — Streamlit app.
-XGBoost prediction + SHAP explainability + LLM plain-English memo.
+XGBoost prediction + SHAP explainability + LLM plain-English memo + What-If Analysis.
 """
 
 import os
@@ -18,9 +18,7 @@ st.set_page_config(page_title="AI Credit Assessor", layout="wide")
 
 st.markdown("""
 <style>
-  /* Remove top padding from main content area */
   .block-container { padding-top: 1.5rem !important; }
-  /* Remove margin below SVG in sidebar and header */
   .element-container:has(svg) { margin-bottom: 0 !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -28,6 +26,35 @@ st.markdown("""
 _svg = open("logo.svg", encoding="utf-8").read()
 _svg_sidebar = _svg.replace('width="200"', 'width="110"').replace('height="120"', 'height="70"')
 _svg_header  = _svg.replace('width="200"', 'width="72"').replace('height="120"', 'height="56"')
+
+# ── What-If options map ────────────────────────────────────────────────────────
+# categorical → list of valid values; numeric → (min, max, step)
+_WHATIF_OPTIONS = {
+    "checking_status":       ["<0", "0<=X<200", ">=200", "no checking"],
+    "duration":              (6, 72, 1),
+    "credit_history":        ["no credits/all paid", "all paid", "existing paid",
+                              "delayed previously", "critical/other existing credit"],
+    "credit_amount":         (250, 20000, 100),
+    "savings_status":        ["<100", "100<=X<500", "500<=X<1000", ">=1000", "no known savings"],
+    "employment":            ["unemployed", "<1", "1<=X<4", "4<=X<7", ">=7"],
+    "installment_commitment":(1, 4, 1),
+    "age":                   (19, 75, 1),
+    "residence_since":       (1, 4, 1),
+    "existing_credits":      [1, 2, 3, 4],
+    "num_dependents":        [1, 2],
+    "purpose":               ["new car", "used car", "furniture/equipment", "radio/tv",
+                              "domestic appliance", "repairs", "education", "business",
+                              "retraining", "other"],
+    "property_magnitude":    ["real estate", "life insurance", "car", "no known property"],
+    "other_parties":         ["none", "co applicant", "guarantor"],
+    "other_payment_plans":   ["none", "bank", "stores"],
+    "housing":               ["own", "for free", "rent"],
+    "job":                   ["unskilled resident", "unemp/unskilled non res",
+                              "skilled", "high qualif/self emp/mgmt"],
+    "personal_status":       ["male single", "female div/dep/mar", "male div/sep", "male mar/wid"],
+    "own_telephone":         ["yes", "none"],
+    "foreign_worker":        ["yes", "no"],
+}
 
 # ── API key ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -120,7 +147,7 @@ with st.form("applicant_form"):
 
     submitted = st.form_submit_button("Assess Credit Risk", type="primary", use_container_width=True)
 
-# ── Prediction & output ───────────────────────────────────────────────────────
+# ── On form submit: run model and store in session_state ──────────────────────
 if submitted:
     applicant = {
         "checking_status": checking_status,
@@ -144,13 +171,23 @@ if submitted:
         "own_telephone": own_telephone,
         "foreign_worker": foreign_worker,
     }
-
     with st.spinner("Running model…"):
         result = predict(applicant)
+    st.session_state["result"] = result
+    st.session_state["applicant"] = applicant
+    # Clear any previous what-if widget state so sliders reset to original values
+    for key in list(st.session_state.keys()):
+        if key.startswith("wi_"):
+            del st.session_state[key]
 
-    prob = result["probability"]
-    label = result["risk_label"]
-    shap_vals = result["shap_values"]
+# ── Results (persisted across reruns via session_state) ───────────────────────
+if "result" in st.session_state:
+    result   = st.session_state["result"]
+    applicant = st.session_state["applicant"]
+
+    prob         = result["probability"]
+    label        = result["risk_label"]
+    shap_vals    = result["shap_values"]
     feature_names = result["feature_names"]
 
     st.divider()
@@ -162,7 +199,7 @@ if submitted:
         colour = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}[label]
         st.metric("Default Probability", f"{prob:.1%}")
         st.markdown(f"### {colour} {label} Risk")
-        st.caption(f"Low < 35% · Medium 35-60% · High > 60%")
+        st.caption("Low < 35% · Medium 35–60% · High > 60%")
 
     with col_meter:
         fig_bar, ax = plt.subplots(figsize=(5, 0.6))
@@ -178,17 +215,16 @@ if submitted:
 
     st.divider()
 
-    # ── SHAP waterfall chart ──────────────────────────────────────────────────
+    # ── SHAP chart + LLM memo ─────────────────────────────────────────────────
     col_shap, col_memo = st.columns(2)
 
     with col_shap:
         st.subheader("Factor Breakdown (SHAP)")
         st.caption("Bars show how each factor pushed the risk score up (red) or down (blue) from the baseline.")
 
-        # Top 10 features by absolute SHAP value
-        indices = np.argsort(np.abs(shap_vals))[::-1][:10]
+        indices   = np.argsort(np.abs(shap_vals))[::-1][:10]
         top_names = [feature_names[i] for i in indices]
-        top_vals = [shap_vals[i] for i in indices]
+        top_vals  = [shap_vals[i] for i in indices]
 
         fig, ax = plt.subplots(figsize=(6, 4))
         colors = ["#e74c3c" if v > 0 else "#3498db" for v in top_vals]
@@ -210,14 +246,77 @@ if submitted:
         st.pyplot(fig, use_container_width=True)
         plt.close(fig)
 
-    # ── LLM memo ─────────────────────────────────────────────────────────────
     with col_memo:
         st.subheader("Credit Assessment Memo")
         if not os.environ.get("OPENAI_API_KEY"):
             st.warning("Add your OpenAI API key in the sidebar to generate the memo.")
         else:
-            memo_placeholder = st.empty()
-            memo_text = ""
-            for token in explain_stream(applicant, prob, label, shap_vals, feature_names):
-                memo_text += token
-                memo_placeholder.markdown(memo_text)
+            if submitted:   # only stream on fresh submission, not on what-if reruns
+                memo_placeholder = st.empty()
+                memo_text = ""
+                for token in explain_stream(applicant, prob, label, shap_vals, feature_names):
+                    memo_text += token
+                    memo_placeholder.markdown(memo_text)
+                st.session_state["memo"] = memo_text
+            elif "memo" in st.session_state:
+                st.markdown(st.session_state["memo"])
+
+    # ── What-If Analysis ──────────────────────────────────────────────────────
+    st.divider()
+    st.subheader("What-If Analysis")
+    st.caption(
+        "Adjust the top 3 risk drivers to see how the default probability changes. "
+        "All other factors stay fixed at the original values."
+    )
+
+    # Top 3 features by absolute SHAP value
+    top3_idx      = np.argsort(np.abs(shap_vals))[::-1][:3]
+    top3_features = [feature_names[i] for i in top3_idx]
+
+    whatif_applicant = dict(applicant)  # start from original values
+
+    wi_cols = st.columns(3)
+    for i, feat in enumerate(top3_features):
+        with wi_cols[i]:
+            opts        = _WHATIF_OPTIONS[feat]
+            label_text  = feat.replace("_", " ").title()
+            current_val = applicant[feat]
+
+            if isinstance(opts, list):
+                idx = opts.index(current_val) if current_val in opts else 0
+                whatif_applicant[feat] = st.selectbox(
+                    label_text, opts, index=idx, key=f"wi_{feat}"
+                )
+            else:
+                mn, mx, step = opts
+                whatif_applicant[feat] = st.slider(
+                    label_text, mn, mx, int(current_val), step, key=f"wi_{feat}"
+                )
+
+    wi_result = predict(whatif_applicant)
+    wi_prob   = wi_result["probability"]
+    wi_label  = wi_result["risk_label"]
+    delta     = wi_prob - prob
+
+    wi_colour = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}[wi_label]
+
+    res_cols = st.columns(3)
+    with res_cols[0]:
+        st.metric("Original Probability", f"{prob:.1%}")
+        orig_colour = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}[label]
+        st.markdown(f"**{orig_colour} {label} Risk**")
+    with res_cols[1]:
+        st.metric(
+            "New Probability",
+            f"{wi_prob:.1%}",
+            delta=f"{delta:+.1%}",
+            delta_color="inverse",   # green = lower risk = good
+        )
+        st.markdown(f"**{wi_colour} {wi_label} Risk**")
+    with res_cols[2]:
+        if delta < -0.05:
+            st.success("Risk reduced — these changes improve the applicant's profile.")
+        elif delta > 0.05:
+            st.error("Risk increased — these changes worsen the applicant's profile.")
+        else:
+            st.info("Minimal change — the model is not very sensitive to these adjustments.")
