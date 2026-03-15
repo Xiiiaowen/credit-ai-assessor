@@ -125,7 +125,7 @@ def generate_pdf(
         direction = "increases" if shap_values[i] > 0 else "decreases"
         pdf.multi_cell(
             0, 6,
-            f"  \u2022 {label_str} ('{val}'): {direction} default risk  [SHAP: {shap_values[i]:+.3f}]"
+            f"  - {label_str} ('{val}'): {direction} default risk  [SHAP: {shap_values[i]:+.3f}]"
         )
     pdf.ln(3)
 
