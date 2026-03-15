@@ -67,3 +67,19 @@ def predict(applicant: dict) -> dict:
         "feature_names": feature_names,
         "encoded_input": X,
     }
+
+
+def get_global_importance() -> dict:
+    """
+    Return global feature importance (XGBoost gain) and saved model metrics.
+    """
+    art = _load()
+    model = art["model"]
+    feature_names = art["feature_names"]
+    importances = model.feature_importances_   # gain-based, sums to 1
+    order = np.argsort(importances)[::-1]
+    return {
+        "feature_names": [feature_names[i] for i in order],
+        "importances": [float(importances[i]) for i in order],
+        "metrics": art["metrics"],
+    }
