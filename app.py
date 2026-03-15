@@ -524,6 +524,47 @@ with tab_model:
 
     st.divider()
 
+    # ── Calibration plot ──────────────────────────────────────────────────────
+    st.subheader("Probability Calibration")
+    st.caption(
+        "A well-calibrated model's predicted probabilities match actual default rates. "
+        "Points above the diagonal mean the model underestimates risk; "
+        "points below mean it overestimates. "
+        "Most credit models are intentionally conservative (above the line)."
+    )
+
+    if gi.get("y_test") is not None:
+        from sklearn.calibration import calibration_curve as _cal_curve
+        y_test_arr   = gi["y_test"]
+        y_proba_arr  = gi["y_proba_test"]
+        frac_pos, mean_pred = _cal_curve(y_test_arr, y_proba_arr, n_bins=8, strategy="quantile")
+
+        fig_cal, ax_cal = plt.subplots(figsize=(5, 4))
+        ax_cal.plot([0, 1], [0, 1], "k--", linewidth=1, label="Perfect calibration")
+        ax_cal.plot(mean_pred, frac_pos, "o-", color="#3498db", linewidth=2, markersize=7, label="XGBoost")
+        ax_cal.set_xlabel("Mean predicted probability")
+        ax_cal.set_ylabel("Fraction of actual defaults")
+        ax_cal.set_facecolor("#0e1117")
+        fig_cal.patch.set_facecolor("#0e1117")
+        ax_cal.tick_params(colors="white")
+        ax_cal.xaxis.label.set_color("white")
+        ax_cal.yaxis.label.set_color("white")
+        ax_cal.spines["bottom"].set_color("white")
+        ax_cal.spines["left"].set_color("white")
+        ax_cal.spines["top"].set_visible(False)
+        ax_cal.spines["right"].set_visible(False)
+        leg = ax_cal.legend(fontsize=9)
+        leg.get_frame().set_facecolor("#1e2530")
+        for t in leg.get_texts():
+            t.set_color("white")
+        plt.tight_layout()
+        st.pyplot(fig_cal, use_container_width=False)
+        plt.close(fig_cal)
+    else:
+        st.info("Re-run `python train.py` to enable the calibration plot.")
+
+    st.divider()
+
     # ── Global feature importance ─────────────────────────────────────────────
     st.subheader("Global Feature Importance")
     st.caption(
@@ -552,6 +593,78 @@ with tab_model:
     plt.tight_layout()
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
+
+    st.divider()
+
+    # ── Threshold optimisation ────────────────────────────────────────────────
+    st.subheader("Decision Threshold Optimisation")
+    st.caption(
+        "The default 50% threshold is arbitrary. Banks tune this based on the cost ratio "
+        "of a false negative (missed default) vs a false positive (rejected good applicant). "
+        "A typical ratio is **5:1** — missing a default costs 5× more than a wrongful rejection."
+    )
+
+    if gi.get("y_test") is not None:
+        from sklearn.metrics import precision_score, recall_score, f1_score
+        y_test_arr  = gi["y_test"]
+        y_proba_arr = gi["y_proba_test"]
+
+        threshold = st.slider(
+            "Decision threshold", 0.10, 0.90, 0.50, 0.05,
+            help="Applicants above this probability are flagged as likely defaulters."
+        )
+
+        y_pred = (y_proba_arr >= threshold).astype(int)
+        tp = int(((y_pred == 1) & (y_test_arr == 1)).sum())
+        fp = int(((y_pred == 1) & (y_test_arr == 0)).sum())
+        fn = int(((y_pred == 0) & (y_test_arr == 1)).sum())
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1        = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        cost      = 5 * fn + fp
+
+        tc1, tc2, tc3, tc4, tc5 = st.columns(5)
+        tc1.metric("Threshold", f"{threshold:.0%}")
+        tc2.metric("Precision", f"{precision:.3f}", help="Of flagged defaulters, what fraction actually defaulted?")
+        tc3.metric("Recall",    f"{recall:.3f}",    help="Of actual defaulters, what fraction did the model catch?")
+        tc4.metric("F1 Score",  f"{f1:.3f}")
+        tc5.metric("Cost (5×FN+FP)", cost,          help="Lower is better. FN (missed default) costs 5× more than FP.")
+
+        # Cost curve across all thresholds
+        ts = np.linspace(0.05, 0.95, 60)
+        costs = []
+        for t in ts:
+            yp = (y_proba_arr >= t).astype(int)
+            fn_t = int(((yp == 0) & (y_test_arr == 1)).sum())
+            fp_t = int(((yp == 1) & (y_test_arr == 0)).sum())
+            costs.append(5 * fn_t + fp_t)
+        best_t = ts[int(np.argmin(costs))]
+
+        fig_cost, ax_cost = plt.subplots(figsize=(7, 3))
+        ax_cost.plot(ts, costs, color="#3498db", linewidth=2)
+        ax_cost.axvline(threshold, color="#e74c3c", linewidth=1.5, linestyle="--", label=f"Current: {threshold:.0%}")
+        ax_cost.axvline(best_t,   color="#2ecc71", linewidth=1.5, linestyle="--", label=f"Optimal: {best_t:.0%}")
+        ax_cost.set_xlabel("Threshold")
+        ax_cost.set_ylabel("Relative cost (5×FN + FP)")
+        ax_cost.set_facecolor("#0e1117")
+        fig_cost.patch.set_facecolor("#0e1117")
+        ax_cost.tick_params(colors="white")
+        ax_cost.xaxis.label.set_color("white")
+        ax_cost.yaxis.label.set_color("white")
+        ax_cost.spines["bottom"].set_color("white")
+        ax_cost.spines["left"].set_color("white")
+        ax_cost.spines["top"].set_visible(False)
+        ax_cost.spines["right"].set_visible(False)
+        leg2 = ax_cost.legend(fontsize=9)
+        leg2.get_frame().set_facecolor("#1e2530")
+        for t2 in leg2.get_texts():
+            t2.set_color("white")
+        plt.tight_layout()
+        st.pyplot(fig_cost, use_container_width=True)
+        plt.close(fig_cost)
+        st.caption(f"Optimal threshold at 5:1 cost ratio: **{best_t:.0%}** — move the slider to explore trade-offs.")
+    else:
+        st.info("Re-run `python train.py` to enable threshold optimisation.")
 
     st.divider()
 

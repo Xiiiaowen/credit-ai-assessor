@@ -101,4 +101,6 @@ def get_global_importance() -> dict:
         "feature_names": [feature_names[i] for i in order],
         "importances": [float(importances[i]) for i in order],
         "metrics": art["metrics"],
+        "y_test": art.get("y_test"),
+        "y_proba_test": art.get("y_proba_test"),
     }

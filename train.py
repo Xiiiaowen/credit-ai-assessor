@@ -87,6 +87,8 @@ joblib.dump(
         "encoders": encoders,
         "feature_names": feature_names,
         "metrics": {"auc": auc, "gini": gini, "ks": ks},
+        "y_test": y_test.values,
+        "y_proba_test": y_proba,
     },
     "artifacts/model.pkl",
 )
