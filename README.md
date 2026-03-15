@@ -71,13 +71,15 @@ The Gini coefficient (= 2 × AUC − 1) and KS statistic are the standard metric
 
 ```
 credit-ai-assessor/
-├── app.py              # Streamlit UI
-├── train.py            # One-time model training script
+├── app.py                   # Streamlit UI (assessment form, tabs, What-If, PDF download)
+├── train.py                 # One-time model training script
 ├── model/
-│   ├── predict.py      # Load model, encode input, compute SHAP values
-│   └── explain.py      # GPT-4o-mini memo generation (streaming)
+│   ├── predict.py           # Load model, encode input, compute SHAP values
+│   ├── explain.py           # GPT-4o-mini memo generation (streaming)
+│   ├── counterfactual.py    # Greedy approval path search (minimum changes to reduce risk)
+│   └── report.py            # PDF report generation (fpdf2)
 ├── artifacts/
-│   └── model.pkl       # Trained model + SHAP explainer + encoders
+│   └── model.pkl            # Trained model + SHAP explainer + encoders
 ├── requirements.txt
 └── .env.example
 ```
