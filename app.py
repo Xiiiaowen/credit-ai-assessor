@@ -13,6 +13,7 @@ load_dotenv()
 
 from model.predict import predict, get_global_importance
 from model.explain import explain_stream
+from model.report import generate_pdf
 
 st.set_page_config(page_title="AI Credit Assessor", layout="wide")
 
@@ -315,6 +316,21 @@ with tab_assess:
                 st.error("Risk increased — these changes worsen the applicant's profile.")
             else:
                 st.info("Minimal change — the model is not very sensitive to these adjustments.")
+
+        # ── PDF download ──────────────────────────────────────────────────────
+        st.divider()
+        memo_text = st.session_state.get("memo", "")
+        pdf_bytes = generate_pdf(
+            applicant, prob, label, shap_vals, feature_names, memo_text
+        )
+        st.download_button(
+            label="Download Assessment Report (PDF)",
+            data=pdf_bytes,
+            file_name=f"credit_assessment_{label.lower()}_risk.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+        )
 
 
 # ════════════════════════════════════════════════════════════════════════════
