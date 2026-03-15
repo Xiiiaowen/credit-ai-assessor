@@ -2,7 +2,7 @@
 
 An AI-powered credit risk assessment tool that combines a trained XGBoost model with SHAP explainability and GPT-4o-mini to produce plain-English credit memos — the kind of tool a bank's credit team would actually use.
 
-**[Live Demo →]()**
+**[Live Demo →](https://8mwpw2yoicmfimgsqla2ku.streamlit.app/)**
 
 ---
 
@@ -64,7 +64,7 @@ The Gini coefficient (= 2 × AUC − 1) and KS statistic are the standard metric
 ## Project Structure
 
 ```
-credit-risk-explainer/
+credit-ai-assessor/
 ├── app.py              # Streamlit UI
 ├── train.py            # One-time model training script
 ├── model/
@@ -81,8 +81,8 @@ credit-risk-explainer/
 ## Run Locally
 
 ```bash
-git clone https://github.com/Xiiiaowen/credit-risk-explainer
-cd credit-risk-explainer
+git clone https://github.com/Xiiiaowen/credit-ai-assessor
+cd credit-ai-assessor
 
 pip install -r requirements.txt
 
