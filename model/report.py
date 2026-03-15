@@ -141,8 +141,9 @@ def generate_pdf(
         label_str = FEATURE_LABELS.get(name, name)
         val       = applicant.get(name, "")
         direction = "increases" if shap_values[i] > 0 else "decreases"
+        pdf.set_x(pdf.l_margin)
         pdf.multi_cell(
-            190, 6,
+            pdf.epw, 6,
             _safe(f"  - {label_str} ('{val}'): {direction} default risk  [SHAP: {shap_values[i]:+.3f}]")
         )
     pdf.ln(3)
@@ -153,14 +154,16 @@ def generate_pdf(
         pdf.cell(0, 8, "Credit Assessment Memo", ln=True)
         pdf.set_font("Helvetica", "I", 10)
         pdf.set_fill_color(248, 248, 248)
-        pdf.multi_cell(190, 6, _safe(memo), fill=True)
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(pdf.epw, 6, _safe(memo), fill=True)
         pdf.ln(3)
 
     # ── Disclaimer ────────────────────────────────────────────────────────────
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(150, 150, 150)
+    pdf.set_x(pdf.l_margin)
     pdf.multi_cell(
-        190, 5,
+        pdf.epw, 5,
         "For learning and portfolio demonstration only. "
         "Not intended for actual credit decisions. "
         "Model trained on the German Credit dataset (UCI / OpenML)."
