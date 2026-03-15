@@ -12,6 +12,8 @@ An AI-powered credit risk assessment tool that combines a trained XGBoost model 
 2. **XGBoost model predicts default probability** — trained on the German Credit dataset (1,000 applicants, 20 features)
 3. **SHAP breakdown shows which factors drove the score** — red bars increase risk, blue bars decrease it
 4. **GPT-4o-mini writes a credit assessment memo** — plain English, 3-4 sentences, suitable for a junior loan officer
+5. **What-If Analysis** — adjust the top 3 risk drivers and instantly see how the probability changes
+6. **Model Overview tab** — global feature importance (XGBoost gain), model metrics, and a local vs global explainability comparison
 
 ---
 
@@ -57,6 +59,8 @@ The Gini coefficient (= 2 × AUC − 1) and KS statistic are the standard metric
 - **SHAP feature attribution** — TreeExplainer computes exact Shapley values for tree models (no approximation), showing each feature's contribution to the individual prediction
 - **LLM credit memo** — SHAP values are passed to GPT-4o-mini with a credit officer system prompt; the model translates statistical output into a readable business memo
 - **Finance-standard evaluation** — reports ROC-AUC, Gini coefficient, and KS statistic (not just accuracy)
+- **What-If sensitivity analysis** — top 3 SHAP-identified risk drivers exposed as interactive controls; re-runs the model live to show probability delta
+- **Global vs local explainability** — Model Overview tab contrasts XGBoost gain (global) with per-applicant SHAP (local), with a comparison table
 - **Bring your own API key** — paste key in sidebar; falls back to environment variable
 
 ---
